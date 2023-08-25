@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘</title>
+</head>
+<body>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.2.47/vue.global.js"></script>
+
+
+    <!-- 背景图 -->
+    <img src="./static/img/IMG_2855.JPG" style="width: 100%;height: 150px; object-fit: cover;border-radius: 10px;"  alt="">
+    
+    <div id="app">
+        <!-- 头像与登录 -->
+        <div style=" width: 458px;height: 70px; display: flex;margin: auto;display: flex;flex-direction: row;justify-content: center;">
+            
+            <div style="margin-top: 35px;margin-right: 40px; width: 35px;height: 35px;border-top: 4px solid #000; border-left: 4px solid #000000;border-radius:100% 0 0 0;"></div>
+        
+
+            <div style="width: 305px;height: 70px;display: flex;flex-direction: row;justify-content: center;">
+
+                <img src="./static/img/LOGO.jpg" style="height:115px;width: 115px;border-radius: 100%;margin-top: -50px;;"  alt="">
+
+
+                <div style="box-shadow: 1px 1px 3px rgba(121, 130, 160, 0.55),
+                -1px -1px 3px rgb(255, 255, 255); height: 40px;line-height: 40px;width: 120px;border-radius: 5px;display: flex;flex-direction: row;justify-content: center;margin-left: 30px;cursor: pointer;font-size: 18px;margin-top: 5px;" v-if="!userAdd" @click="login()">点击登录</div>
+
+                <div v-else style="margin-left: 20px;margin-top: 10px;font-size: 33px;font-weight: 600;">{{`${userAdd.slice(0, 4)}...${userAdd.slice(-4)}`}}</div>
+
+            </div>
+
+
+            <div style="margin-top: 35px;margin-left: 35px; width: 35px;height: 35px;border-top: 4px solid #000; border-right: 4px solid #000000;border-radius:0 100% 0 0;"></div>
+        
+        </div>
+
+        <!-- 主体 -->
+        <div style="overflow:hidden; display: flex;flex-direction: row;justify-content: center;">
+            <div style="display: flex;flex-direction: column;align-items: center; margin-top: -50px; height: 659px;width:450px;border: 4px solid #000;border-radius: 50px;">
+
+                <!-- 令牌地址 -->
+                <div style="display: flex;margin-top: 70px;">
+                    <div style="color: rgb(84, 75, 69);font-size: 20px;font-weight: 400;">令牌地址：</div>
+                    <input style="border-radius: 5px;" v-model="tokenAdd" placeholder="请先填写令牌地址" @change="queryTokenInfo()">
+                </div>
+
+                <!-- 令牌信息 -->
+                <div style="display: flex;margin-top: 20px;width: 70%;justify-content: space-around;" v-if="tokenBalanceOf">
+                    <div>简称:{{tokenSymbol}}</div>
+                    <div>精度:{{tokenDecimals}}</div>
+                    <div>余额:{{tokenBalanceOf}}</div>
+                </div>
+
+                <div v-else style="height: 30px;"></div>
+
+                <!-- 地址输入框 -->
+                <div style="margin-top: 60px;color: rgb(84, 75, 69);font-size: 20px;font-weight: 400;">地址列表</div>
+
+                <textarea style="margin-top: 10px;border-radius: 10px;border: 2px solid #000;padding: 10px;" name="" id="context" cols="39" rows="19" v-model="fucInput"  placeholder="格式(为英文符号)：地址1,数量1,地址2,数量2, ... 地址n,数量n"></textarea>
+                
+                <!-- 启动按键 -->
+                <div style="box-shadow: 1px 1px 3px rgba(121, 130, 160, 0.55),
+                -1px -1px 3px rgb(255, 255, 255); height: 40px;line-height: 40px;width: 99px;border-radius: 5px;display: flex;flex-direction: row;justify-content: center;margin-left: 30px;cursor: pointer;font-size: 18px;margin-top: 5px;margin-top: 39px;"  @click="run()">启动</div>
+
+            </div>
+        </div>
+
+        <!-- 声明 -->
+        <div>
+            <div style="display: flex;justify-content: center;margin-top: 105px;">
+                <div>作者@BiliBili：</div>
+                <a href="https://space.bilibili.com/434418210?spm_id_from=333.1007.0.0">木白鹿粦</a>
+            </div>
+            <div style="display: flex;justify-content: center;margin-top: 5px;">
+                仅学习交流使用
+            </div>
+        </div>
+        
+
+    </div>
+
+
+    <script>
+
+        const { createApp } = Vue
+
+        let signer,erc20Token,mainPayContract
+
+        let erc20Abi = [
+            'function symbol() public view returns (string)',
+            'function decimals() public view returns (uint8)',
+            'function balanceOf(address _owner) public view returns (uint256 balance)',
+            'function approve(address _spender, uint256 _value) public returns (bool success)'
+        ]
+
+        let mainPayAbi = [
+            'function run(address tokenAdd,address[] memory userAdd,uint256[] memory userNums) public onlyOwner returns (bool)',
+            'event MassTx(address from)'
+        ]
+
+        let mainPayAdd = '0x8BEC0fAe0B784aA4aA6A59FcccE2F80FaA152222'
+
+        
+        const app = createApp({
+          
+          data() {
+            return {
+              userAdd: '',
+              
+              tokenAdd:'',
+
+              tokenSymbol:'',
+              tokenDecimals:'',
+              tokenBalanceOf:'',
+
+              fucInput:''
+            }
+          },
+
+          methods: {
+
+            // 登录MetaMask
+            async login(){
+                // Provider 是提供对区块链及其状态的只读访问，即连接
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                // 进行钱包授权
+                account = await provider.send("eth_requestAccounts", [])
+
+                // 获取签名者
+                signer = provider.getSigner()
+
+                if (account[0]) {
+                  this.userAdd = account[0];
+                }
+
+            },
+
+            // 查询ERC20令牌信息
+            async queryTokenInfo(){
+
+                erc20Token = new ethers.Contract(
+                    this.tokenAdd,
+                    erc20Abi,
+                    signer
+                )
+
+                this.tokenSymbol = await erc20Token.symbol()
+                let _tokenBalanceOf = await erc20Token.balanceOf(this.userAdd)
+                let _tokenDecimals =  await erc20Token.decimals()
+                console.log(_tokenBalanceOf)
+                this.tokenDecimals = _tokenDecimals
+                this.tokenBalanceOf = _tokenBalanceOf / 10**_tokenDecimals
+
+            },
+
+            // 启动程序
+            async run(){
+                
+                let userinput = this.fucInput
+
+                let userAddArr = []
+                let userNumsArr = []
+
+                let totalNum = 0
+
+                // 首先处理传入的地址参数
+                userinput = userinput.split(",")
+                for(i=0;i<userinput.length;i++){
+
+                    if(i%2 == 1){
+                        userNumsArr.push(ethers.utils.parseUnits(userinput[i],Number(this.tokenDecimals)))
+                        totalNum += Number(userinput[i])
+                    }else{
+                        userAddArr.push(userinput[i])
+                    }
+
+                }
+                
+                // 实例化群发智能合约
+                mainPayContract = new ethers.Contract(
+                    mainPayAdd,
+                    mainPayAbi,
+                    signer
+                )
+
+                // 监听群发合约调用
+                mainPayContract.once("MassTx",(e)=>{
+                    alert(`${e}发起的群发分币，成功`)
+                })
+
+                try{
+
+                    // 授权给群发智能合约对应的令牌数量
+                    await erc20Token.approve(
+                        mainPayAdd,
+                        ethers.utils.parseUnits(totalNum.toString(),Number(this.    tokenDecimals)),
+                        {
+                            gasLimit:200000,
+                            gasPrice:2500000000
+                        }
+                    )
+                    
+                    // 调用分币合约的run函数
+                    await mainPayContract.run(
+                        this.tokenAdd,
+                        userAddArr,
+                        userNumsArr,
+                        {
+                            gasLimit:1000000,
+                            gasPrice:2500000000
+                        }    
+                    )   
+
+                }
+                catch(err){
+
+                    alert(`出错了，请检查一遍再试试吧=>>>${err}`)
+
+                }
+
+
+                
+            },
+          }
+        }).mount('#app')
+
+
+        ethereum.on("accountsChanged", async() => {
+            app.login()
+        });
+
+
+    </script>
+
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js" type="application/javascript"></script>
+
+      
+
+</body>
+
+</html>

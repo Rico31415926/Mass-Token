@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.6;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract MainPay is Ownable{
+
+    IERC20 paytoken;
+
+    // 主函数
+    function run(address tokenAdd,address[] memory userAdd,uint256[] memory userNums) public onlyOwner returns (bool){
+
+        paytoken = IERC20(tokenAdd);
+
+        for(uint256 i = 0; i < userAdd.length; i++ ){
+
+            paytoken.transferFrom(msg.sender, userAdd[i], userNums[i]);
+
+        }
+
+        emit MassTx(msg.sender);
+
+        return true;
+    
+    }
+
+    // 提取合约中的任何令牌
+    function withdrawAnyToken(address tokenAddress, address account, uint256 amount) public onlyOwner {
+        require(IERC20(tokenAddress).balanceOf(address(this)) >= amount , "BAD");
+        IERC20(tokenAddress).transfer(account, amount);
+    }
+
+    // 执行成功，则打印日志
+    event MassTx(address from);
+
+}
